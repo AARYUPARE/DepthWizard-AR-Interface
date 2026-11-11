@@ -2,6 +2,7 @@ import SwiftUI
 import RealityKit
 import ARKit
 import UIKit
+import Combine
 
 struct ARExperienceView: View {
     let storedProject: StoredProject
@@ -93,6 +94,7 @@ private struct ARSceneView: UIViewRepresentable {
         private var placedAnchor: AnchorEntity?
         var lastResetToken: UUID
         private var loadStarted = false
+        private var modelLoadCancellable: AnyCancellable?
 
         init(status: Binding<String>, resetToken: UUID) {
             _status = status
@@ -104,7 +106,7 @@ private struct ARSceneView: UIViewRepresentable {
             self.modelURL = modelURL
             view.session.delegate = self
             view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(handleTap(_:))))
-            Task { await loadModel() }
+            loadModel()
         }
 
         func runSession(reset: Bool = false) {
@@ -121,16 +123,24 @@ private struct ARSceneView: UIViewRepresentable {
             status = "Move your iPad slowly to scan a floor or tabletop."
         }
 
-        private func loadModel() async {
+        private func loadModel() {
             guard !loadStarted, let modelURL else { return }
             loadStarted = true
-            do {
-                let entity = try await Entity(contentsOf: modelURL)
-                modelTemplate = entity
-                status = "Model ready. Tap a detected surface to place it."
-            } catch {
-                status = "Couldn't load the USDZ model: \(error.localizedDescription)"
-            }
+        
+            modelLoadCancellable = Entity.loadAsync(contentsOf: modelURL)
+                .receive(on: DispatchQueue.main)
+                .sink(receiveCompletion: { [weak self] completion in
+                    guard case .failure(let error) = completion else { return }
+        
+                    Task { @MainActor [weak self] in
+                        self?.status = "Couldn't load the USDZ model: \(error.localizedDescription)"
+                    }
+                }, receiveValue: { [weak self] entity in
+                    Task { @MainActor [weak self] in
+                        self?.modelTemplate = entity
+                        self?.status = "Model ready. Tap a detected surface to place it."
+                    }
+                })
         }
 
         @objc private func handleTap(_ recognizer: UITapGestureRecognizer) {
