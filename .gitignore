@@ -1,0 +1,15 @@
+.DS_Store
+DerivedData/
+.build/
+*.xcuserstate
+xcuserdata/
+__pycache__/
+*.py[cod]
+.env
+
+# Generated iOS build products and local export library
+DepthWizardAR.xcodeproj/
+*.ipa
+*.xcarchive
+*.app/
+DepthWizard-AR-Exports/

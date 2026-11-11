@@ -1,0 +1,28 @@
+name: DepthWizardAR
+options:
+  bundleIdPrefix: com.depthwizard
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: 5.9
+    TARGETED_DEVICE_FAMILY: "2"
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+targets:
+  DepthWizardAR:
+    type: application
+    platform: iOS
+    sources:
+      - path: DepthWizardAR
+    info:
+      path: Configuration/Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.depthwizard.ar
+        PRODUCT_NAME: DepthWizard AR
+        INFOPLIST_KEY_CFBundleDisplayName: DepthWizard AR
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.graphics-design
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        SWIFT_EMIT_LOC_STRINGS: YES

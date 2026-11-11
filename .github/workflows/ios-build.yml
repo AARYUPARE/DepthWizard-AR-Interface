@@ -1,0 +1,32 @@
+name: iPad source build
+on:
+  push:
+    paths:
+      - 'DepthWizardAR/**'
+      - 'project.yml'
+      - '.github/workflows/ios-build.yml'
+  pull_request:
+    paths:
+      - 'DepthWizardAR/**'
+      - 'project.yml'
+      - '.github/workflows/ios-build.yml'
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+      - name: Validate Windows bridge and sample project
+        run: |
+          python3 -m unittest discover -s Tests -v
+          python3 Tools/validate_project.py Samples/SampleRelativeTerrain
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        run: xcodegen generate --spec project.yml
+      - name: Resolve packages
+        run: xcodebuild -resolvePackageDependencies -project DepthWizardAR.xcodeproj -scheme DepthWizardAR
+      - name: Compile for iPad (unsigned)
+        run: xcodebuild -project DepthWizardAR.xcodeproj -scheme DepthWizardAR -sdk iphoneos -configuration Debug CODE_SIGNING_ALLOWED=NO build

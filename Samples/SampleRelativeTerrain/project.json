@@ -1,0 +1,12 @@
+{
+  "id": "SampleRelativeTerrain",
+  "name": "Sample Relative Terrain",
+  "description": "A small USDZ terrain asset to test the iPad RealityKit project handoff.",
+  "createdAt": "2026-11-11T00:00:00Z",
+  "modelFile": "model.usdz",
+  "modelFormat": "usdz",
+  "sourceModelFile": null,
+  "sourceImage": null,
+  "elevationMode": "Relative DSM",
+  "units": "relative"
+}

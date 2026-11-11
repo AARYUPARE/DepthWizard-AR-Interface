@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>NSAppTransportSecurity</key>
+    <dict><key>NSAllowsLocalNetworking</key><true/></dict>
+    <key>NSCameraUsageDescription</key>
+    <string>DepthWizard AR uses the camera to detect surfaces and place your reconstructed terrain in the real world.</string>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>DepthWizard AR connects to your Windows laptop over your private Wi-Fi network to list and download your projects.</string>
+    <key>UIUserInterfaceStyle</key><string>Light</string>
+    <key>UIRequiredDeviceCapabilities</key><array><string>arkit</string></array>
+    <key>UIDeviceFamily</key><array><integer>2</integer></array>
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+    <key>UILaunchScreen</key><dict/>
+</dict>
+</plist>
