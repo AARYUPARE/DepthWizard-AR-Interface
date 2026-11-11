@@ -62,8 +62,8 @@ struct ConnectLaptopView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Laptop connection").font(.headline).foregroundStyle(ink)
             VStack(alignment: .leading, spacing: 6) {
-                Text("LAPTOP IP ADDRESS").font(.caption2.bold()).tracking(0.8).foregroundStyle(.secondary)
-                TextField("192.168.1.20", text: $host).keyboardType(.decimalPad).textInputAutocapitalization(.never).autocorrectionDisabled()
+                Text("LAPTOP ADDRESS").font(.caption2.bold()).tracking(0.8).foregroundStyle(.secondary)
+                TextField("https://your-domain.ngrok-free.dev", text: $host).textInputAutocapitalization(.never).autocorrectionDisabled()
                     .padding(13).background(Color(red: 0.96, green: 0.97, blue: 0.985), in: RoundedRectangle(cornerRadius: 12))
             }
             VStack(alignment: .leading, spacing: 6) {

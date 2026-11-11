@@ -33,6 +33,7 @@ struct ProjectSyncClient {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.setValue("Bearer \(pairingCode)", forHTTPHeaderField: "Authorization")
+        request.setValue("1", forHTTPHeaderField: "ngrok-skip-browser-warning")
         let (data, response) = try await session.data(for: request)
         try check(response)
         guard let decoded = try? JSONDecoder().decode(ProjectListResponse.self, from: data) else { throw ProjectSyncError.invalidResponse }
@@ -51,6 +52,7 @@ struct ProjectSyncClient {
         let url = try endpoint(host: host, path: "/api/v1/projects/\(project.id)/model")
         var request = URLRequest(url: url)
         request.setValue("Bearer \(pairingCode)", forHTTPHeaderField: "Authorization")
+        request.setValue("1", forHTTPHeaderField: "ngrok-skip-browser-warning")
         let (temporaryFile, response) = try await session.download(for: request)
         do {
             try check(response)
@@ -85,14 +87,35 @@ struct ProjectSyncClient {
     }
 
     private func endpoint(host: String, path: String) throws -> URL {
-        let trimmed = host.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !trimmed.contains("/"), !trimmed.contains("@"), !trimmed.contains(":") else { throw ProjectSyncError.invalidAddress }
-        var components = URLComponents()
-        components.scheme = "http"
-        components.host = trimmed
-        components.port = 8765
+    let trimmed = host.trimmingCharacters(in: .whitespacesAndNewlines)
+
+    guard !trimmed.isEmpty,
+          var components = URLComponents(string:
+            trimmed.contains("://") ? trimmed : "http://\(trimmed)"
+          ),
+          let scheme = components.scheme?.lowercased(),
+          ["http", "https"].contains(scheme),
+          let hostname = components.host,
+          !hostname.isEmpty,
+          components.user == nil,
+          components.password == nil,
+          components.query == nil,
+            components.fragment == nil,
+            components.path.isEmpty
+        else {
+            throw ProjectSyncError.invalidAddress
+        }
+
+        if scheme == "http" && components.port == nil {
+            components.port = 8765
+        }
+
         components.path = path
-        guard let url = components.url else { throw ProjectSyncError.invalidAddress }
+
+        guard let url = components.url else {
+            throw ProjectSyncError.invalidAddress
+        }
+
         return url
     }
 
