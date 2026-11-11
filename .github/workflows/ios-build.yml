@@ -1,4 +1,6 @@
+
 name: iPad source build
+
 on:
   push:
     paths:
@@ -11,22 +13,72 @@ on:
       - 'project.yml'
       - '.github/workflows/ios-build.yml'
   workflow_dispatch:
+
 jobs:
   build:
     runs-on: macos-15
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
       - name: Validate Windows bridge and sample project
         run: |
           python3 -m unittest discover -s Tests -v
           python3 Tools/validate_project.py Samples/SampleRelativeTerrain
+
       - name: Install XcodeGen
         run: brew install xcodegen
+
       - name: Generate Xcode project
         run: xcodegen generate --spec project.yml
+
       - name: Resolve packages
-        run: xcodebuild -resolvePackageDependencies -project DepthWizardAR.xcodeproj -scheme DepthWizardAR
-      - name: Compile for iPad (unsigned)
-        run: xcodebuild -project DepthWizardAR.xcodeproj -scheme DepthWizardAR -sdk iphoneos -configuration Debug CODE_SIGNING_ALLOWED=NO build
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project DepthWizardAR.xcodeproj \
+            -scheme DepthWizardAR
+
+      - name: Compile for iPad
+        run: |
+          xcodebuild \
+            -project DepthWizardAR.xcodeproj \
+            -scheme DepthWizardAR \
+            -sdk iphoneos \
+            -configuration Debug \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package unsigned IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APP_PATH=$(find build/Build/Products/Debug-iphoneos \
+            -maxdepth 1 -name '*.app' -print -quit)
+
+          if [ -z "$APP_PATH" ]; then
+            echo "ERROR: Compiled iOS app not found."
+            exit 1
+          fi
+
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+
+          ditto -c -k --sequesterRsrc --keepParent \
+            Payload DepthWizardAR-unsigned.ipa
+
+          echo "IPA created successfully:"
+          ls -lh DepthWizardAR-unsigned.ipa
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DepthWizardAR-unsigned-IPA
+          path: DepthWizardAR-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 7
