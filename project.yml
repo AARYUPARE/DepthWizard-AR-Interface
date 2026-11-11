@@ -17,6 +17,9 @@ targets:
       - path: DepthWizardAR
     info:
       path: Configuration/Info.plist
+      properties:
+        NSCameraUsageDescription: "DepthWizard AR uses the camera to detect surfaces and place your reconstructed terrain in the real world."
+        NSLocalNetworkUsageDescription: "DepthWizard AR connects to your Windows laptop to list and download projects."
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.depthwizard.ar

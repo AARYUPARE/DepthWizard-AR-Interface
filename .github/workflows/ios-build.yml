@@ -52,6 +52,31 @@ jobs:
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             build
+      
+      - name: Verify camera permission in built app
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APP_PATH=$(find build/Build/Products/Debug-iphoneos \
+            -maxdepth 1 -name '*.app' -print -quit)
+
+          if [ -z "$APP_PATH" ]; then
+            echo "ERROR: App bundle not found."
+            exit 1
+          fi
+
+          echo "Checking built Info.plist..."
+
+          /usr/libexec/PlistBuddy \
+            -c "Print :NSCameraUsageDescription" \
+            "$APP_PATH/Info.plist"
+
+          /usr/libexec/PlistBuddy \
+            -c "Print :NSLocalNetworkUsageDescription" \
+            "$APP_PATH/Info.plist"
+
+          echo "Permission descriptions verified!"
 
       - name: Package unsigned IPA
         shell: bash
