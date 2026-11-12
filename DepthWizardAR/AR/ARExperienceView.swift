@@ -10,12 +10,15 @@ struct ARExperienceView: View {
     @State private var status = "Move your iPad slowly to find a surface."
     @State private var showHelp = false
     @State private var resetToken = UUID()
+    @State private var showAllMeasurements = false
 
     var body: some View {
         ZStack {
             ARSceneView(
                 modelURL: storedProject.folderURL.appendingPathComponent(storedProject.project.modelFile),
                 resetToken: resetToken,
+                measurements: storedProject.project.measurements ?? [],
+                showAllMeasurements: showAllMeasurements,
                 status: $status
             ).ignoresSafeArea()
             VStack(spacing: 0) {
@@ -35,7 +38,13 @@ struct ARExperienceView: View {
                     Text(status).font(.subheadline.weight(.medium)).multilineTextAlignment(.center)
                         .padding(.horizontal, 18).padding(.vertical, 12).frame(maxWidth: .infinity)
                         .background(.regularMaterial, in: Capsule())
-                    HStack(spacing: 14) {
+                    HStack(spacing: 10) {
+                        if !(storedProject.project.measurements ?? []).isEmpty {
+                            control(showAllMeasurements ? "Featured pins" : "All pins", icon: "mappin.and.ellipse") {
+                                showAllMeasurements.toggle()
+                                resetToken = UUID()
+                            }
+                        }
                         control("Reset", icon: "arrow.counterclockwise") { resetToken = UUID() }
                         control("Instructions", icon: "questionmark.circle") { showHelp = true }
                     }
@@ -61,9 +70,11 @@ struct ARExperienceView: View {
 private struct ARSceneView: UIViewRepresentable {
     let modelURL: URL
     let resetToken: UUID
+    let measurements: [TerrainMeasurement]
+    let showAllMeasurements: Bool
     @Binding var status: String
 
-    func makeCoordinator() -> Coordinator { Coordinator(status: $status, resetToken: resetToken) }
+    func makeCoordinator() -> Coordinator { Coordinator(status: $status, resetToken: resetToken, measurements: measurements, showAllMeasurements: showAllMeasurements) }
 
     func makeUIView(context: Context) -> ARView {
         let view = ARView(frame: .zero)
@@ -74,6 +85,8 @@ private struct ARSceneView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: ARView, context: Context) {
+        context.coordinator.measurements = measurements
+        context.coordinator.showAllMeasurements = showAllMeasurements
         if context.coordinator.lastResetToken != resetToken {
             context.coordinator.lastResetToken = resetToken
             context.coordinator.removeModel()
@@ -92,13 +105,18 @@ private struct ARSceneView: UIViewRepresentable {
         private var modelURL: URL?
         private var modelTemplate: Entity?
         private var placedAnchor: AnchorEntity?
+        private var measurementRoot: Entity?
+        var measurements: [TerrainMeasurement]
+        var showAllMeasurements: Bool
         var lastResetToken: UUID
         private var loadStarted = false
         private var modelLoadCancellable: AnyCancellable?
 
-        init(status: Binding<String>, resetToken: UUID) {
+        init(status: Binding<String>, resetToken: UUID, measurements: [TerrainMeasurement], showAllMeasurements: Bool) {
             _status = status
             lastResetToken = resetToken
+            self.measurements = measurements
+            self.showAllMeasurements = showAllMeasurements
         }
 
         func attach(to view: ARView, modelURL: URL) {
@@ -149,6 +167,12 @@ private struct ARSceneView: UIViewRepresentable {
                 return
             }
             let point = recognizer.location(in: view)
+            if let hit = view.entity(at: point), let pin = measurementID(for: hit) {
+                if let measurement = measurements.first(where: { $0.id == pin }) {
+                    status = "Point \(pin): \(measurement.displayValue) · \(measurement.type) · pixel (\(measurement.pixelX), \(measurement.pixelY))"
+                    return
+                }
+            }
             let results = view.raycast(from: point, allowing: .estimatedPlane, alignment: .horizontal)
             guard let result = results.first else {
                 status = "No horizontal surface found yet. Move the iPad slowly and try again."
@@ -165,12 +189,72 @@ private struct ARSceneView: UIViewRepresentable {
             view.scene.addAnchor(anchor)
             placedAnchor = anchor
             view.installGestures([.translation, .rotation, .scale], for: movable)
-            status = "Placed! Drag to move, pinch to resize and rotate with two fingers."
+            addMeasurementPins(to: movable)
+            status = measurements.isEmpty
+                ? "Placed! Drag to move, pinch to resize and rotate with two fingers."
+                : "Placed! Tap a measurement pin to inspect its value."
         }
 
         func removeModel() {
             if let placedAnchor { arView?.scene.removeAnchor(placedAnchor) }
             placedAnchor = nil
+            measurementRoot = nil
+        }
+
+        private func addMeasurementPins(to terrain: ModelEntity) {
+            let visible = measurements.filter { $0.normalizedPosition.isValid }
+            let selected = showAllMeasurements ? visible : visible.filter(\.featured)
+            guard !selected.isEmpty else { return }
+
+            let bounds = terrain.visualBounds(relativeTo: terrain)
+            let minimum = bounds.min
+            let size = bounds.extents
+            let root = Entity()
+            root.name = "DepthWizardMeasurementPins"
+
+            for measurement in selected {
+                let p = measurement.normalizedPosition
+                let pin = ModelEntity(
+                    mesh: .generateSphere(radius: 0.008),
+                    materials: [UnlitMaterial(color: .systemBlue)]
+                )
+                pin.name = "dw-measurement-\(measurement.id)"
+                pin.position = SIMD3<Float>(
+                    minimum.x + Float(p.x) * size.x,
+                    minimum.y + Float(p.y) * size.y + 0.012,
+                    minimum.z + Float(p.z) * size.z
+                )
+                pin.components.set(CollisionComponent(shapes: [.generateSphere(radius: 0.018)]))
+                root.addChild(pin)
+
+                let labelMesh = MeshResource.generateText(
+                    measurement.displayValue,
+                    extrusionDepth: 0.0005,
+                    font: .systemFont(ofSize: 0.035, weight: .bold),
+                    containerFrame: .zero,
+                    alignment: .center,
+                    lineBreakMode: .byClipping
+                )
+                let label = ModelEntity(mesh: labelMesh, materials: [UnlitMaterial(color: .white)])
+                label.name = "dw-measurement-label-\(measurement.id)"
+                label.position = pin.position + SIMD3<Float>(0, 0.025, 0)
+                label.scale = SIMD3<Float>(repeating: 0.35)
+                root.addChild(label)
+            }
+
+            terrain.addChild(root)
+            measurementRoot = root
+        }
+
+        private func measurementID(for entity: Entity) -> String? {
+            var current: Entity? = entity
+            while let candidate = current {
+                if candidate.name.hasPrefix("dw-measurement-") {
+                    return String(candidate.name.dropFirst("dw-measurement-".count))
+                }
+                current = candidate.parent
+            }
+            return nil
         }
 
         private func normalizeForTabletop(_ entity: Entity) {
