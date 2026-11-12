@@ -76,6 +76,9 @@ struct ARExperienceView: View {
                                 icon: "mappin.and.ellipse"
                             ) {
                                 showAllMeasurements.toggle()
+                                if !showAllMeasurements, let selectedMeasurement, !selectedMeasurement.featured {
+                                    self.selectedMeasurement = nil
+                                }
                             }
                         }
                         control("Reset", icon: "arrow.counterclockwise") {
@@ -133,7 +136,7 @@ struct ARExperienceView: View {
 
             HStack(spacing: 14) {
                 detailValue("Raster pixel", "((measurement.pixelX), (measurement.pixelY))")
-                detailValue("Terrain position", measurement.normalizedPosition.displayString)
+                detailValue("Terrain position (normalized)", measurement.normalizedPosition.displayString)
             }
         }
         .padding(16)
@@ -196,9 +199,14 @@ private struct ARSceneView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: ARView, context: Context) {
+        let measurementDisplayChanged =
+            context.coordinator.measurements != measurements ||
+            context.coordinator.showAllMeasurements != showAllMeasurements
         context.coordinator.measurements = measurements
         context.coordinator.showAllMeasurements = showAllMeasurements
-        context.coordinator.refreshMeasurementPins()
+        if measurementDisplayChanged {
+            context.coordinator.refreshMeasurementPins()
+        }
 
         if context.coordinator.lastResetToken != resetToken {
             context.coordinator.lastResetToken = resetToken
