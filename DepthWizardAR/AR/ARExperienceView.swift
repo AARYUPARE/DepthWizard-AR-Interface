@@ -296,11 +296,17 @@ private struct ARSceneView: UIViewRepresentable {
             guard let view = arView else { return }
             let point = recognizer.location(in: view)
 
-            if let hit = view.entity(at: point), let identifier = measurementID(for: hit),
-               let measurement = measurements.first(where: { $0.id == identifier }) {
-                selectedMeasurement = measurement
-                status = "Selected \(measurement.label)."
-                return
+            if let hit = view.entity(at: point) {
+                if let identifier = measurementID(for: hit),
+                   let measurement = measurements.first(where: { $0.id == identifier }) {
+                    selectedMeasurement = measurement
+                    status = "Selected \(measurement.label)."
+                    return
+                }
+                if isTerrainEntity(hit) {
+                    // A tap on the placed surface should not trigger a second plane placement.
+                    return
+                }
             }
 
             selectedMeasurement = nil
@@ -396,12 +402,27 @@ private struct ARSceneView: UIViewRepresentable {
                 )
                 label.name = "dw-measurement-label-\(measurement.id)"
                 label.position = pin.position + SIMD3<Float>(0, 0.025, 0)
+                // RealityKit text is generated in an XY plane. Rotate it onto the
+                // terrain's XZ top plane so it reads from the user's overhead AR view.
+                label.orientation = simd_quatf(
+                    angle: -.pi / 2,
+                    axis: SIMD3<Float>(1, 0, 0)
+                )
                 label.scale = SIMD3<Float>(repeating: 0.35)
                 root.addChild(label)
             }
 
             terrain.addChild(root)
             measurementRoot = root
+        }
+
+        private func isTerrainEntity(_ entity: Entity) -> Bool {
+            var current: Entity? = entity
+            while let candidate = current {
+                if candidate.name == "DepthWizard AR Model" { return true }
+                current = candidate.parent
+            }
+            return false
         }
 
         private func measurementID(for entity: Entity) -> String? {
