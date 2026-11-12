@@ -51,7 +51,7 @@ Example `project.json`:
       "type": "rdsm",
       "pixelX": 10,
       "pixelY": 25,
-      "normalizedPosition": { "x": 0.0943, "y": 0.624, "z": 0.6951 },
+      "normalizedPosition": { "x": 0.09433962264150944, "y": 0.625, "z": 0.6951219512195121 },
       "featured": true
     }
   ]
