@@ -5,6 +5,10 @@ on:
   push:
     paths:
       - 'DepthWizardAR/**'
+      - 'DesktopBridge/**'
+      - 'Tests/**'
+      - 'Tools/**'
+      - 'Docs/**'
       - 'project.yml'
       - '.github/workflows/ios-build.yml'
   pull_request:
@@ -15,7 +19,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: depthwizard-ipad-ar-${{ github.head_ref || github.ref }}
+  group: depthwizard-ipad-ar-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
