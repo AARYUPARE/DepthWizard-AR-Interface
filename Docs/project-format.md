@@ -52,7 +52,7 @@ Example `project.json`:
       "pixelX": 10,
       "pixelY": 25,
       "normalizedPosition": { "x": 0.09433962264150944, "y": 0.625, "z": 0.6951219512195121 },
-      "featured": true
+      "featured": false
     }
   ]
 }
