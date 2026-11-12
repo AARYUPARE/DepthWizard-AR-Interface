@@ -10,6 +10,7 @@ struct DepthWizardProject: Identifiable, Codable, Hashable {
     var sourceImage: String?
     var elevationMode: String?
     var units: String?
+    var measurements: [TerrainMeasurement]?
 
     var displayFormat: String { modelFormat.uppercased() }
 }
@@ -24,6 +25,7 @@ struct RemoteProject: Identifiable, Decodable, Hashable {
     let sourceImage: String?
     let elevationMode: String?
     let units: String?
+    let measurements: [TerrainMeasurement]?
     let modelSizeBytes: Int
     let sha256: String
 
@@ -36,7 +38,8 @@ struct RemoteProject: Identifiable, Decodable, Hashable {
         return DepthWizardProject(
             id: id, name: name, description: description, createdAt: date,
             modelFile: modelFile, modelFormat: modelFormat,
-            sourceImage: sourceImage, elevationMode: elevationMode, units: units
+            sourceImage: sourceImage, elevationMode: elevationMode, units: units,
+            measurements: measurements
         )
     }
 }

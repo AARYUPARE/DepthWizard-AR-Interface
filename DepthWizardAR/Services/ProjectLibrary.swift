@@ -87,7 +87,7 @@ final class ProjectLibrary: ObservableObject {
             try fileManager.copyItem(at: source, to: folder.appendingPathComponent(filename))
             let project = DepthWizardProject(id: id, name: source.deletingPathExtension().lastPathComponent,
                 description: "Imported USDZ asset", createdAt: Date(), modelFile: filename,
-                modelFormat: "usdz", sourceImage: nil, elevationMode: "Imported", units: "Unspecified")
+                modelFormat: "usdz", sourceImage: nil, elevationMode: "Imported", units: "Unspecified", measurements: nil)
             try JSONEncoder.depthWizard.encode(project).write(to: folder.appendingPathComponent("project.json"), options: .atomic)
             refresh()
         } catch {

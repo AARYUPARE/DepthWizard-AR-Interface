@@ -11,6 +11,7 @@ import hashlib
 import hmac
 import ipaddress
 import json
+import math
 import re
 import secrets
 import struct
@@ -102,6 +103,61 @@ def validate_usdz(path: Path) -> int:
     return size
 
 
+def clean_measurements(value: Any) -> list[dict[str, Any]] | None:
+    """Validate and expose the bounded, local-coordinate measurement payload."""
+    if value is None:
+        return None
+    if not isinstance(value, list) or not 1 <= len(value) <= 500:
+        raise ProjectError("Measurements must contain between 1 and 500 entries")
+    clean: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for point in value:
+        if not isinstance(point, dict):
+            raise ProjectError("Measurement entries must be JSON objects")
+        identifier = point.get("id")
+        if not isinstance(identifier, str) or not PROJECT_ID_RE.fullmatch(identifier) or identifier in seen:
+            raise ProjectError("Measurement IDs must be unique safe identifiers")
+        if point.get("type") not in {"dsm", "rdsm"}:
+            raise ProjectError("Measurement type must be dsm or rdsm")
+        expected_units = "m" if point["type"] == "dsm" else "relative"
+        if point.get("units") != expected_units:
+            raise ProjectError("Measurement units do not match the surface type")
+        value_number = point.get("value")
+        if isinstance(value_number, bool) or not isinstance(value_number, (int, float)) or not math.isfinite(value_number):
+            raise ProjectError("Measurement values must be finite numbers")
+        label, source = point.get("label"), point.get("source")
+        if not all(isinstance(item, str) and item.strip() and len(item) <= 120 for item in (label, source)):
+            raise ProjectError("Measurement labels and sources must be non-empty strings up to 120 characters")
+        if type(point.get("featured")) is not bool:
+            raise ProjectError("Measurement featured flags must be booleans")
+        pixel_x, pixel_y = point.get("pixelX"), point.get("pixelY")
+        if (isinstance(pixel_x, bool) or not isinstance(pixel_x, int) or pixel_x < 0 or
+                isinstance(pixel_y, bool) or not isinstance(pixel_y, int) or pixel_y < 0):
+            raise ProjectError("Measurement pixel coordinates must be non-negative integers")
+        position = point.get("normalizedPosition")
+        if not isinstance(position, dict):
+            raise ProjectError("Measurement normalizedPosition must be an object")
+        coordinates = {axis: position.get(axis) for axis in ("x", "y", "z")}
+        if any(isinstance(coordinate, bool) or not isinstance(coordinate, (int, float)) or
+               not math.isfinite(coordinate) or not 0.0 <= coordinate <= 1.0
+               for coordinate in coordinates.values()):
+            raise ProjectError("Measurement normalized positions must be finite fractions in [0, 1]")
+        clean.append({
+            "id": identifier,
+            "label": label,
+            "value": float(value_number),
+            "units": expected_units,
+            "source": source,
+            "type": point["type"],
+            "pixelX": pixel_x,
+            "pixelY": pixel_y,
+            "normalizedPosition": {axis: float(coordinate) for axis, coordinate in coordinates.items()},
+            "featured": point["featured"],
+        })
+        seen.add(identifier)
+    return clean
+
+
 def validate_project_folder(folder: Path) -> dict[str, Any]:
     if folder.is_symlink() or not folder.is_dir():
         raise ProjectError("Project folder must be a real directory")
@@ -136,6 +192,69 @@ def validate_project_folder(folder: Path) -> dict[str, Any]:
     except OSError as exc:
         raise ProjectError("Could not resolve model path") from exc
     size = validate_usdz(asset_path)
+    measurements = clean_measurements(manifest.get("measurements"))
+    if measurements is not None:
+        if type(manifest.get("measurementSchemaVersion")) is not int or manifest.get("measurementSchemaVersion") != 1:
+            raise ProjectError("Unsupported measurement schema version")
+        if manifest.get("measurementCoordinateSpace") != "terrain_glb_local_bounds_v1":
+            raise ProjectError("Unsupported measurement coordinate-space contract")
+        if manifest.get("measurementPixelOrigin") != "top_left_zero_based":
+            raise ProjectError("Unsupported measurement pixel origin")
+        expected_axes = {
+            "x": "raster_columns_positive",
+            "y": "mesh_elevation_up",
+            "z": "negative_raster_rows",
+        }
+        if manifest.get("measurementAxes") != expected_axes:
+            raise ProjectError("Measurement axis contract is missing or invalid")
+        width, height = manifest.get("measurementRasterWidth"), manifest.get("measurementRasterHeight")
+        stride = manifest.get("measurementMeshStride")
+        if (isinstance(width, bool) or not isinstance(width, int) or width < 2 or
+                isinstance(height, bool) or not isinstance(height, int) or height < 2 or
+                isinstance(stride, bool) or not isinstance(stride, int) or stride < 1):
+            raise ProjectError("Measurement raster dimensions or mesh stride are invalid")
+        for key in (
+            "measurementSourceSurfaceSha256",
+            "measurementMeshSha256",
+            "measurementBuildConfigSha256",
+        ):
+            digest = manifest.get(key)
+            if not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+                raise ProjectError(f"{key} must be a lowercase SHA-256 digest")
+        if manifest.get("measurementMeshSha256") != manifest.get("sourceMeshSha256"):
+            raise ProjectError("Measurement metadata does not identify the exported source mesh")
+        product = manifest.get("surfaceProduct")
+        units = manifest.get("verticalUnits", manifest.get("units"))
+        expected_units = "m" if product == "dsm" else "relative" if product == "rdsm" else None
+        value_minimum, value_maximum = manifest.get("measurementValueMinimum"), manifest.get("measurementValueMaximum")
+        if (isinstance(value_minimum, bool) or not isinstance(value_minimum, (int, float)) or
+                not math.isfinite(value_minimum) or isinstance(value_maximum, bool) or
+                not isinstance(value_maximum, (int, float)) or not math.isfinite(value_maximum) or
+                value_maximum < value_minimum):
+            raise ProjectError("Measurement elevation value range is missing or invalid")
+        if expected_units is None or units != expected_units:
+            raise ProjectError("Project surface product and vertical units are inconsistent")
+        if any(point["type"] != product or point["units"] != expected_units or
+               point["pixelX"] >= width or point["pixelY"] >= height
+               for point in measurements):
+            raise ProjectError("Measurement point does not match the project's source raster")
+        for point in measurements:
+            position = point["normalizedPosition"]
+            expected_x = point["pixelX"] / (width - 1)
+            expected_z = 1.0 - point["pixelY"] / (height - 1)
+            if not math.isclose(position["x"], expected_x, rel_tol=0.0, abs_tol=1e-6):
+                raise ProjectError("Measurement normalized X does not match its source raster column")
+            if not math.isclose(position["z"], expected_z, rel_tol=0.0, abs_tol=1e-6):
+                raise ProjectError("Measurement normalized Z does not match its source raster row")
+            if not value_minimum <= point["value"] <= value_maximum:
+                raise ProjectError("Measurement value is outside the sampled elevation range")
+            value_range = value_maximum - value_minimum
+            expected_y = 0.5 if value_range <= 1e-12 else (point["value"] - value_minimum) / value_range
+            if not math.isclose(position["y"], expected_y, rel_tol=0.0, abs_tol=1e-6):
+                raise ProjectError("Measurement normalized Y does not match its source elevation value")
+            if ((point["pixelX"] % stride != 0 and point["pixelX"] != width - 1) or
+                    (point["pixelY"] % stride != 0 and point["pixelY"] != height - 1)):
+                raise ProjectError("Measurement pixel is not a vertex in the exported LOD0 grid")
     clean = {
         "id": project_id,
         "name": manifest["name"][:160],
@@ -146,6 +265,7 @@ def validate_project_folder(folder: Path) -> dict[str, Any]:
         "sourceImage": str(manifest.get("sourceImage") or "")[:255] or None,
         "elevationMode": str(manifest.get("elevationMode") or "")[:80] or None,
         "units": str(manifest.get("units") or "")[:80] or None,
+        "measurements": measurements,
         "modelSizeBytes": size,
         "sha256": sha256_file(asset_path),
     }
