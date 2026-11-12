@@ -213,6 +213,16 @@ def validate_project_folder(folder: Path) -> dict[str, Any]:
                 isinstance(height, bool) or not isinstance(height, int) or height < 2 or
                 isinstance(stride, bool) or not isinstance(stride, int) or stride < 1):
             raise ProjectError("Measurement raster dimensions or mesh stride are invalid")
+        for key in (
+            "measurementSourceSurfaceSha256",
+            "measurementMeshSha256",
+            "measurementBuildConfigSha256",
+        ):
+            digest = manifest.get(key)
+            if not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+                raise ProjectError(f"{key} must be a lowercase SHA-256 digest")
+        if manifest.get("measurementMeshSha256") != manifest.get("sourceMeshSha256"):
+            raise ProjectError("Measurement metadata does not identify the exported source mesh")
         product = manifest.get("surfaceProduct")
         units = manifest.get("verticalUnits", manifest.get("units"))
         expected_units = "m" if product == "dsm" else "relative" if product == "rdsm" else None
