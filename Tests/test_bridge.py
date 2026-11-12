@@ -59,6 +59,8 @@ def add_measurements(folder: Path, *, invalid_pixel: bool = False) -> None:
         "measurementRasterWidth": 641,
         "measurementRasterHeight": 481,
         "measurementMeshStride": 1,
+        "measurementValueMinimum": 504.375,
+        "measurementValueMaximum": 520.375,
         "sourceMeshSha256": "a" * 64,
         "measurementMeshSha256": "a" * 64,
         "measurementSourceSurfaceSha256": "b" * 64,
