@@ -226,6 +226,12 @@ def validate_project_folder(folder: Path) -> dict[str, Any]:
         product = manifest.get("surfaceProduct")
         units = manifest.get("verticalUnits", manifest.get("units"))
         expected_units = "m" if product == "dsm" else "relative" if product == "rdsm" else None
+        value_minimum, value_maximum = manifest.get("measurementValueMinimum"), manifest.get("measurementValueMaximum")
+        if (isinstance(value_minimum, bool) or not isinstance(value_minimum, (int, float)) or
+                not math.isfinite(value_minimum) or isinstance(value_maximum, bool) or
+                not isinstance(value_maximum, (int, float)) or not math.isfinite(value_maximum) or
+                value_maximum < value_minimum):
+            raise ProjectError("Measurement elevation value range is missing or invalid")
         if expected_units is None or units != expected_units:
             raise ProjectError("Project surface product and vertical units are inconsistent")
         if any(point["type"] != product or point["units"] != expected_units or
@@ -240,6 +246,12 @@ def validate_project_folder(folder: Path) -> dict[str, Any]:
                 raise ProjectError("Measurement normalized X does not match its source raster column")
             if not math.isclose(position["z"], expected_z, rel_tol=0.0, abs_tol=1e-6):
                 raise ProjectError("Measurement normalized Z does not match its source raster row")
+            if not value_minimum <= point["value"] <= value_maximum:
+                raise ProjectError("Measurement value is outside the sampled elevation range")
+            value_range = value_maximum - value_minimum
+            expected_y = 0.5 if value_range <= 1e-12 else (point["value"] - value_minimum) / value_range
+            if not math.isclose(position["y"], expected_y, rel_tol=0.0, abs_tol=1e-6):
+                raise ProjectError("Measurement normalized Y does not match its source elevation value")
             if ((point["pixelX"] % stride != 0 and point["pixelX"] != width - 1) or
                     (point["pixelY"] % stride != 0 and point["pixelY"] != height - 1)):
                 raise ProjectError("Measurement pixel is not a vertex in the exported LOD0 grid")
