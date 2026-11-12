@@ -56,8 +56,8 @@ def add_measurements(folder: Path, *, invalid_pixel: bool = False) -> None:
             "y": "mesh_elevation_up",
             "z": "negative_raster_rows",
         },
-        "measurementRasterWidth": 640,
-        "measurementRasterHeight": 480,
+        "measurementRasterWidth": 641,
+        "measurementRasterHeight": 481,
         "measurementMeshStride": 1,
         "sourceMeshSha256": "a" * 64,
         "measurementMeshSha256": "a" * 64,
@@ -70,8 +70,8 @@ def add_measurements(folder: Path, *, invalid_pixel: bool = False) -> None:
             "units": "m",
             "source": "Persisted DSM raster",
             "type": "dsm",
-            "pixelX": 640 if invalid_pixel else 12,
-            "pixelY": 24,
+            "pixelX": 641 if invalid_pixel else 160,
+            "pixelY": 120,
             "normalizedPosition": {"x": 0.25, "y": 0.5, "z": 0.75},
             "featured": True,
         }],
@@ -96,9 +96,20 @@ class BridgeTests(unittest.TestCase):
             self.assertEqual(len(item["measurements"]), 1)
             point = item["measurements"][0]
             self.assertEqual(point["label"], "Point 01")
-            self.assertEqual(point["pixelX"], 12)
+            self.assertEqual(point["pixelX"], 160)
             self.assertEqual(point["units"], "m")
             self.assertEqual(point["normalizedPosition"], {"x": 0.25, "y": 0.5, "z": 0.75})
+
+    def test_measurement_normalized_position_must_match_source_pixel(self):
+        with tempfile.TemporaryDirectory() as temp:
+            folder = create_project(Path(temp))
+            add_measurements(folder)
+            manifest_path = folder / "project.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["measurements"][0]["normalizedPosition"]["x"] = 0.5
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaises(server.ProjectError):
+                server.validate_project_folder(folder)
 
     def test_measurement_pixel_outside_raster_is_rejected(self):
         with tempfile.TemporaryDirectory() as temp:
