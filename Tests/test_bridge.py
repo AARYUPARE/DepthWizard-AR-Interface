@@ -42,6 +42,39 @@ def create_project(root: Path, project_id: str = "test-project") -> Path:
     return folder
 
 
+def add_measurements(folder: Path, *, invalid_pixel: bool = False) -> None:
+    manifest_path = folder / "project.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest.update({
+        "surfaceProduct": "dsm",
+        "verticalUnits": "m",
+        "measurementSchemaVersion": 1,
+        "measurementCoordinateSpace": "terrain_glb_local_bounds_v1",
+        "measurementPixelOrigin": "top_left_zero_based",
+        "measurementAxes": {
+            "x": "raster_columns_positive",
+            "y": "mesh_elevation_up",
+            "z": "negative_raster_rows",
+        },
+        "measurementRasterWidth": 640,
+        "measurementRasterHeight": 480,
+        "measurementMeshStride": 1,
+        "measurements": [{
+            "id": "p00_00",
+            "label": "Point 01",
+            "value": 512.375,
+            "units": "m",
+            "source": "Persisted DSM raster",
+            "type": "dsm",
+            "pixelX": 640 if invalid_pixel else 12,
+            "pixelY": 24,
+            "normalizedPosition": {"x": 0.25, "y": 0.5, "z": 0.75},
+            "featured": True,
+        }],
+    })
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+
 class BridgeTests(unittest.TestCase):
     def test_valid_project_and_hash(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -50,6 +83,37 @@ class BridgeTests(unittest.TestCase):
             self.assertEqual(item["id"], "test-project")
             self.assertEqual(len(item["sha256"]), 64)
             self.assertGreater(item["modelSizeBytes"], 64)
+
+    def test_valid_measurement_contract_is_returned(self):
+        with tempfile.TemporaryDirectory() as temp:
+            folder = create_project(Path(temp))
+            add_measurements(folder)
+            item = server.validate_project_folder(folder)
+            self.assertEqual(len(item["measurements"]), 1)
+            point = item["measurements"][0]
+            self.assertEqual(point["label"], "Point 01")
+            self.assertEqual(point["pixelX"], 12)
+            self.assertEqual(point["units"], "m")
+            self.assertEqual(point["normalizedPosition"], {"x": 0.25, "y": 0.5, "z": 0.75})
+
+    def test_measurement_pixel_outside_raster_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            folder = create_project(Path(temp))
+            add_measurements(folder, invalid_pixel=True)
+            with self.assertRaises(server.ProjectError):
+                server.validate_project_folder(folder)
+
+    def test_relative_dsm_cannot_claim_metre_units(self):
+        with tempfile.TemporaryDirectory() as temp:
+            folder = create_project(Path(temp))
+            add_measurements(folder)
+            manifest_path = folder / "project.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["surfaceProduct"] = "rdsm"
+            manifest["verticalUnits"] = "relative"
+            (folder / "project.json").write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaises(server.ProjectError):
+                server.validate_project_folder(folder)
 
     def test_traversal_and_invalid_project_id_rejected(self):
         with tempfile.TemporaryDirectory() as temp:
