@@ -11,6 +11,7 @@ import hashlib
 import hmac
 import ipaddress
 import json
+import math
 import re
 import secrets
 import struct
@@ -102,6 +103,53 @@ def validate_usdz(path: Path) -> int:
     return size
 
 
+def clean_measurements(value: Any) -> list[dict[str, Any]]:
+    """Return bounded, validated terrain measurement metadata for the iPad."""
+    if not isinstance(value, list):
+        return []
+    clean: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in value[:500]:
+        if not isinstance(item, dict):
+            continue
+        identifier = item.get("id")
+        number = item.get("value")
+        position = item.get("normalizedPosition")
+        if not isinstance(identifier, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", identifier) or identifier in seen:
+            continue
+        if isinstance(number, bool) or not isinstance(number, (int, float)) or not math.isfinite(number):
+            continue
+        if not isinstance(position, dict):
+            continue
+        coordinates = {axis: position.get(axis) for axis in ("x", "y", "z")}
+        if any(isinstance(coordinate, bool) or not isinstance(coordinate, (int, float)) or
+               not math.isfinite(coordinate) or not 0.0 <= coordinate <= 1.0
+               for coordinate in coordinates.values()):
+            continue
+        pixel_x, pixel_y = item.get("pixelX"), item.get("pixelY")
+        if (isinstance(pixel_x, bool) or not isinstance(pixel_x, int) or pixel_x < 0 or
+                isinstance(pixel_y, bool) or not isinstance(pixel_y, int) or pixel_y < 0):
+            continue
+        units = item.get("units")
+        source = item.get("source")
+        measurement_type = item.get("type")
+        if not all(isinstance(text, str) and len(text) <= 80 for text in (units, source, measurement_type)):
+            continue
+        clean.append({
+            "id": identifier,
+            "value": float(number),
+            "units": units,
+            "source": source,
+            "type": measurement_type,
+            "pixelX": pixel_x,
+            "pixelY": pixel_y,
+            "normalizedPosition": {axis: float(coordinate) for axis, coordinate in coordinates.items()},
+            "featured": item.get("featured") is True,
+        })
+        seen.add(identifier)
+    return clean
+
+
 def validate_project_folder(folder: Path) -> dict[str, Any]:
     if folder.is_symlink() or not folder.is_dir():
         raise ProjectError("Project folder must be a real directory")
@@ -146,6 +194,7 @@ def validate_project_folder(folder: Path) -> dict[str, Any]:
         "sourceImage": str(manifest.get("sourceImage") or "")[:255] or None,
         "elevationMode": str(manifest.get("elevationMode") or "")[:80] or None,
         "units": str(manifest.get("units") or "")[:80] or None,
+        "measurements": clean_measurements(manifest.get("measurements")),
         "modelSizeBytes": size,
         "sha256": sha256_file(asset_path),
     }
