@@ -194,7 +194,7 @@ def validate_project_folder(folder: Path) -> dict[str, Any]:
     size = validate_usdz(asset_path)
     measurements = clean_measurements(manifest.get("measurements"))
     if measurements is not None:
-        if manifest.get("measurementSchemaVersion") != 1:
+        if type(manifest.get("measurementSchemaVersion")) is not int or manifest.get("measurementSchemaVersion") != 1:
             raise ProjectError("Unsupported measurement schema version")
         if manifest.get("measurementCoordinateSpace") != "terrain_glb_local_bounds_v1":
             raise ProjectError("Unsupported measurement coordinate-space contract")
@@ -232,6 +232,17 @@ def validate_project_folder(folder: Path) -> dict[str, Any]:
                point["pixelX"] >= width or point["pixelY"] >= height
                for point in measurements):
             raise ProjectError("Measurement point does not match the project's source raster")
+        for point in measurements:
+            position = point["normalizedPosition"]
+            expected_x = point["pixelX"] / (width - 1)
+            expected_z = 1.0 - point["pixelY"] / (height - 1)
+            if not math.isclose(position["x"], expected_x, rel_tol=0.0, abs_tol=1e-6):
+                raise ProjectError("Measurement normalized X does not match its source raster column")
+            if not math.isclose(position["z"], expected_z, rel_tol=0.0, abs_tol=1e-6):
+                raise ProjectError("Measurement normalized Z does not match its source raster row")
+            if ((point["pixelX"] % stride != 0 and point["pixelX"] != width - 1) or
+                    (point["pixelY"] % stride != 0 and point["pixelY"] != height - 1)):
+                raise ProjectError("Measurement pixel is not a vertex in the exported LOD0 grid")
     clean = {
         "id": project_id,
         "name": manifest["name"][:160],
