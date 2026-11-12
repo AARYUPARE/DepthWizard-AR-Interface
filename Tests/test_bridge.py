@@ -59,6 +59,10 @@ def add_measurements(folder: Path, *, invalid_pixel: bool = False) -> None:
         "measurementRasterWidth": 640,
         "measurementRasterHeight": 480,
         "measurementMeshStride": 1,
+        "sourceMeshSha256": "a" * 64,
+        "measurementMeshSha256": "a" * 64,
+        "measurementSourceSurfaceSha256": "b" * 64,
+        "measurementBuildConfigSha256": "c" * 64,
         "measurements": [{
             "id": "p00_00",
             "label": "Point 01",
