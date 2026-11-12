@@ -35,6 +35,9 @@ Example `project.json`:
   "measurementRasterWidth": 107,
   "measurementRasterHeight": 83,
   "measurementMeshStride": 5,
+  "measurementSourceSurfaceSha256": "<64 lowercase hex characters>",
+  "measurementMeshSha256": "<same digest as sourceMeshSha256>",
+  "measurementBuildConfigSha256": "<64 lowercase hex characters>",
   "measurements": [
     {
       "id": "p00_00",
@@ -43,9 +46,9 @@ Example `project.json`:
       "units": "relative",
       "source": "Persisted relative DSM raster",
       "type": "rdsm",
-      "pixelX": 12,
-      "pixelY": 24,
-      "normalizedPosition": { "x": 0.1132, "y": 0.624, "z": 0.7073 },
+      "pixelX": 10,
+      "pixelY": 25,
+      "normalizedPosition": { "x": 0.0943, "y": 0.624, "z": 0.6951 },
       "featured": true
     }
   ]
@@ -62,6 +65,6 @@ Desktop samples the persisted primary DSM or rDSM used to generate the exported 
 
 DSM measurement values use metres only when the source DSM declares metre units. rDSM values retain the raw relative elevation value and `relative` units. rDSM's display-only vertical exaggeration is used only to position the point on the rendered terrain; it is never applied to the reported measurement value or presented as metres.
 
-Bridge validation checks the schema, coordinate-space declaration, axis declaration, raster dimensions, mesh stride, unique IDs, finite values, units/product consistency, pixel bounds, and normalized positions in [0, 1]. Legacy projects without measurement metadata remain valid and simply show no measurement pins.
+Bridge validation checks the schema, coordinate-space declaration, axis declaration, raster dimensions, mesh stride, unique IDs, finite values, units/product consistency, pixel bounds, normalized positions in [0, 1], exact normalized X/Z correspondence to the source pixel, and that each pixel lies on the declared LOD0 sample grid (including appended last-row/last-column edge vertices). It also checks the source surface, source mesh, and build-configuration SHA-256 provenance fields; the measurement mesh digest must match the exported source GLB digest. Legacy projects without measurement metadata remain valid and simply show no measurement pins.
 
 The laptop bridge computes the model size and SHA-256 at discovery time. The iPad checks both after download and verifies the ZIP signature before saving. The bridge also checks that USDZ entries are uncompressed, 64-byte aligned, path-safe, within size limits, and that the first entry is a USD scene file. These are package/transfer checks, not proof that RealityKit will render every possible material or that the elevation model is scientifically accurate.
