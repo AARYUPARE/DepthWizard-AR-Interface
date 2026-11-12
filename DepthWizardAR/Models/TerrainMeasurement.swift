@@ -16,6 +16,7 @@ struct TerrainMeasurementPosition: Codable, Hashable {
 
 struct TerrainMeasurement: Identifiable, Codable, Hashable {
     let id: String
+    let label: String
     let value: Double
     let units: String
     let source: String
