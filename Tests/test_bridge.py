@@ -111,6 +111,20 @@ class BridgeTests(unittest.TestCase):
             with self.assertRaises(server.ProjectError):
                 server.validate_project_folder(folder)
 
+    def test_measurement_pixel_must_be_a_vertex_in_lod0_grid(self):
+        with tempfile.TemporaryDirectory() as temp:
+            folder = create_project(Path(temp))
+            add_measurements(folder)
+            manifest_path = folder / "project.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["measurementMeshStride"] = 5
+            point = manifest["measurements"][0]
+            point["pixelX"] = 161
+            point["normalizedPosition"]["x"] = 161 / 640
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaises(server.ProjectError):
+                server.validate_project_folder(folder)
+
     def test_measurement_pixel_outside_raster_is_rejected(self):
         with tempfile.TemporaryDirectory() as temp:
             folder = create_project(Path(temp))
