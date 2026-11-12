@@ -14,6 +14,10 @@ on:
       - '.github/workflows/ios-build.yml'
   workflow_dispatch:
 
+concurrency:
+  group: depthwizard-ipad-ar-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: macos-15
